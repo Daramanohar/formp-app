@@ -89,7 +89,7 @@ with tab1:
             # Display uploaded image
             if uploaded_file.type.startswith('image/'):
                 image = Image.open(uploaded_file)
-                st.image(image, caption="Uploaded Document", use_column_width=True)
+                st.image(image, caption="Uploaded Document", use_container_width=True)
             else:
                 st.info(f"📄 Uploaded: {uploaded_file.name}")
             
@@ -275,18 +275,22 @@ with tab3:
         # Export functionality
         st.subheader("📥 Export Data")
         if st.button("📊 Export All Data as JSON"):
-            export_data = {
-                'processed_documents': st.session_state.processed_data,
-                'chat_history': st.session_state.chat_history,
-                'export_timestamp': form_utils.get_timestamp()
-            }
-            
-            st.download_button(
-                "📥 Download JSON Export",
-                data=json.dumps(export_data, indent=2),
-                file_name=f"pm_data_export_{form_utils.get_timestamp().replace(':', '-')}.json",
-                mime="application/json"
-            )
+            try:
+                export_data = form_utils.export_data(
+                    st.session_state.processed_data, 
+                    st.session_state.chat_history
+                )
+                
+                st.download_button(
+                    "📥 Download JSON Export",
+                    data=json.dumps(export_data, indent=2),
+                    file_name=f"pm_data_export_{form_utils.get_timestamp().replace(':', '-')}.json",
+                    mime="application/json"
+                )
+                st.success("✅ Export data prepared successfully!")
+            except Exception as e:
+                st.error(f"❌ Export failed: {str(e)}")
+                st.info("💡 Try processing fewer documents or contact support if the issue persists.")
 
 # Footer
 st.divider()

@@ -177,12 +177,24 @@ class FormUtils:
                 "key_fields": self.extract_key_fields(doc['ocr_result']['text'], doc['ocr_result']['form_type'])
             }
             
-            # Add analysis if available
+            # Add analysis if available (safely handle non-serializable objects)
             if 'analysis' in doc:
+                analysis = doc['analysis']
                 export_doc['analysis'] = {
-                    "summary": doc['analysis']['summary'],
-                    "completeness_score": doc['analysis'].get('completeness_analysis', {}).get('ai_analysis', ''),
+                    "summary": str(analysis.get('summary', '')),
+                    "key_values": str(analysis.get('key_values', '')),
+                    "form_type": str(analysis.get('form_type', '')),
+                    "text_length": analysis.get('text_length', 0),
+                    "status": str(analysis.get('status', ''))
                 }
+                
+                # Handle completeness analysis safely
+                if 'completeness_analysis' in analysis:
+                    completeness = analysis['completeness_analysis']
+                    if isinstance(completeness, dict):
+                        export_doc['analysis']['completeness_analysis'] = str(completeness.get('ai_analysis', ''))
+                    else:
+                        export_doc['analysis']['completeness_analysis'] = str(completeness)
             
             export_data["documents"].append(export_doc)
             
