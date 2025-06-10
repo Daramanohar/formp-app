@@ -4,7 +4,10 @@ from mistralai import Mistral
 from PIL import Image
 import streamlit as st
 from typing import Optional, Dict, Any
-from .form_utils import FormUtils
+try:
+    from .form_utils import FormUtils
+except ImportError:
+    from modules.form_utils import FormUtils
 
 class OCRProcessor:
     """Handles OCR processing using Mistral AI API."""

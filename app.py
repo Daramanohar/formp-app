@@ -2,10 +2,36 @@ import streamlit as st
 import os
 from PIL import Image
 import json
-from modules.ocr_processor import OCRProcessor
-from modules.data_analyzer import DataAnalyzer
-from modules.chatbot import DataChatbot
-from modules.form_utils import FormUtils
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from modules.ocr_processor import OCRProcessor
+    from modules.data_analyzer import DataAnalyzer
+    from modules.chatbot import DataChatbot
+    from modules.form_utils import FormUtils
+except ImportError:
+    # Fallback for local development
+    import importlib.util
+    
+    def load_module_from_path(module_name, file_path):
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    
+    # Load modules directly
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    form_utils = load_module_from_path("form_utils", os.path.join(base_path, "modules", "form_utils.py"))
+    ocr_processor = load_module_from_path("ocr_processor", os.path.join(base_path, "modules", "ocr_processor.py"))
+    data_analyzer = load_module_from_path("data_analyzer", os.path.join(base_path, "modules", "data_analyzer.py"))
+    chatbot = load_module_from_path("chatbot", os.path.join(base_path, "modules", "chatbot.py"))
+    
+    OCRProcessor = ocr_processor.OCRProcessor
+    DataAnalyzer = data_analyzer.DataAnalyzer
+    DataChatbot = chatbot.DataChatbot
+    FormUtils = form_utils.FormUtils
 
 # Page configuration
 st.set_page_config(
