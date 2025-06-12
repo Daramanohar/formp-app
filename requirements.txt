@@ -1,15 +1,8 @@
-streamlit>=1.45.1
+streamlit>=1.25.0
 groq>=0.26.0
 mistralai>=1.8.0
 pillow>=10.0.0
 pydantic>=2.11.0
 python-dotenv>=1.0.0
-
-# Standard Library Modules (built-in with Python)
-# base64 - for image encoding
-# json - for data serialization  
-# os - for environment variables
-# io - for file handling
-# typing - for type hints
-# datetime - for timestamps
-# re - for regex patterns
+pandas>=2.0.0
+requests>=2.28.0
