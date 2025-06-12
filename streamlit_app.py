@@ -15,7 +15,7 @@ from modules.form_utils import FormUtils
 
 # Page configuration
 st.set_page_config(
-    page_title="📊 Product Manager Data Tool",
+    page_title="📊 form processing data tool",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
