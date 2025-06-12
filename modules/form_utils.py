@@ -1,249 +1,28 @@
+"""
+Form utilities for data processing, validation, and export functionality
+"""
 import json
+import csv
 from datetime import datetime
-from typing import Any, Dict, List
-import streamlit as st
+from io import StringIO
+import pandas as pd
+
 
 class FormUtils:
-    """Utility functions for form processing and data management."""
+    """Utility functions for form processing and data management"""
     
     def __init__(self):
+        """Initialize form utilities"""
         pass
     
-    def get_timestamp(self) -> str:
-        """Get current timestamp in a readable format."""
+    def get_timestamp(self):
+        """Get current timestamp in readable format"""
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    def validate_file_type(self, filename: str) -> bool:
-        """Validate if file type is supported."""
-        supported_extensions = ['jpg', 'jpeg', 'png', 'pdf']
-        file_extension = filename.split('.')[-1].lower()
-        return file_extension in supported_extensions
+    def get_iso_timestamp(self):
+        """Get current timestamp in ISO format"""
+        return datetime.now().isoformat()
     
-    def format_file_size(self, size_bytes: int) -> str:
-        """Format file size in human readable format."""
-        if size_bytes < 1024:
-            return f"{size_bytes} B"
-        elif size_bytes < 1024**2:
-            return f"{size_bytes/1024:.1f} KB"
-        elif size_bytes < 1024**3:
-            return f"{size_bytes/(1024**2):.1f} MB"
-        else:
-            return f"{size_bytes/(1024**3):.1f} GB"
-    
-    def clean_text(self, text: str) -> str:
-        """Clean and normalize extracted text."""
-        if not text:
-            return ""
-        
-        # Remove excessive whitespace
-        text = ' '.join(text.split())
-        
-        # Remove special characters that might cause issues
-        text = text.replace('\x00', '')  # Remove null characters
-        
-        return text.strip()
-    
-    def extract_key_fields(self, text: str, form_type: str) -> Dict[str, Any]:
-        """Extract key fields based on form type."""
-        key_fields = {}
-        text_lower = text.lower()
-        
-        if form_type == "medical":
-            # Medical form key fields
-            patterns = {
-                "patient_name": ["patient name", "name:", "patient:"],
-                "date_of_birth": ["dob:", "date of birth", "birth date"],
-                "diagnosis": ["diagnosis:", "condition:", "icd"],
-                "medication": ["medication:", "drug:", "prescription:"],
-                "provider": ["provider:", "doctor:", "physician:"]
-            }
-        elif form_type == "insurance":
-            # Insurance form key fields
-            patterns = {
-                "policy_number": ["policy no", "policy number", "policy #"],
-                "insured_name": ["insured:", "policyholder:", "name:"],
-                "coverage": ["coverage:", "benefits:", "limits:"],
-                "premium": ["premium:", "payment:", "cost:"],
-                "claim_number": ["claim no", "claim number", "claim #"]
-            }
-        elif form_type == "financial":
-            # Financial form key fields
-            patterns = {
-                "account_number": ["account no", "account number", "acct #"],
-                "balance": ["balance:", "amount:", "total:"],
-                "date": ["date:", "as of:", "statement date"],
-                "transaction": ["transaction:", "payment:", "deposit:"]
-            }
-        else:
-            # General patterns
-            patterns = {
-                "name": ["name:", "full name"],
-                "date": ["date:", "dated:"],
-                "amount": ["amount:", "total:", "$"],
-                "reference": ["ref:", "reference:", "#"]
-            }
-        
-        # Extract fields based on patterns
-        for field, pattern_list in patterns.items():
-            for pattern in pattern_list:
-                if pattern in text_lower:
-                    # Try to extract the value after the pattern
-                    start_idx = text_lower.find(pattern)
-                    if start_idx != -1:
-                        # Look for the value after the pattern
-                        value_start = start_idx + len(pattern)
-                        line_end = text.find('\n', value_start)
-                        if line_end == -1:
-                            line_end = len(text)
-                        
-                        value = text[value_start:line_end].strip()
-                        # Clean up the value
-                        value = value.split(':')[-1].strip() if ':' in value else value
-                        
-                        if value and len(value) > 0:
-                            key_fields[field] = value
-                            break
-        
-        return key_fields
-    
-    def generate_summary_report(self, processed_data: List[Dict[str, Any]]) -> str:
-        """Generate a summary report of all processed documents."""
-        if not processed_data:
-            return "No documents have been processed yet."
-        
-        report = "📊 PROCESSING SUMMARY REPORT\n"
-        report += "=" * 50 + "\n\n"
-        
-        # Overview
-        report += f"📈 Total Documents Processed: {len(processed_data)}\n"
-        report += f"🕒 Report Generated: {self.get_timestamp()}\n\n"
-        
-        # Document types breakdown
-        form_types = {}
-        for doc in processed_data:
-            form_type = doc['ocr_result']['form_type']
-            form_types[form_type] = form_types.get(form_type, 0) + 1
-        
-        report += "📋 Document Types:\n"
-        for form_type, count in form_types.items():
-            report += f"  • {form_type.title()}: {count} document(s)\n"
-        
-        report += "\n" + "=" * 50 + "\n\n"
-        
-        # Individual document summaries
-        report += "📄 INDIVIDUAL DOCUMENTS:\n\n"
-        for i, doc in enumerate(processed_data, 1):
-            report += f"{i}. {doc['filename']}\n"
-            report += f"   Type: {doc['ocr_result']['form_type'].title()}\n"
-            report += f"   Processed: {doc['timestamp']}\n"
-            report += f"   Text Length: {len(doc['ocr_result']['text'])} characters\n"
-            
-            # Add summary if available
-            if 'analysis' in doc and 'summary' in doc['analysis']:
-                summary_preview = doc['analysis']['summary'][:100] + "..." if len(doc['analysis']['summary']) > 100 else doc['analysis']['summary']
-                report += f"   Summary: {summary_preview}\n"
-            
-            report += "\n"
-        
-        report += "=" * 50 + "\n"
-        report += "📊 End of Report"
-        
-        return report
-    
-    def export_data(self, processed_data: List[Dict[str, Any]], chat_history: List[Dict[str, str]]) -> Dict[str, Any]:
-        """Export all data in a structured format."""
-        export_data = {
-            "metadata": {
-                "export_timestamp": self.get_timestamp(),
-                "total_documents": len(processed_data),
-                "total_chat_messages": len(chat_history)
-            },
-            "documents": [],
-            "chat_history": chat_history,
-            "summary": {
-                "form_types": {},
-                "processing_dates": []
-            }
-        }
-        
-        # Process documents for export
-        for doc in processed_data:
-            export_doc = {
-                "filename": doc['filename'],
-                "timestamp": doc['timestamp'],
-                "form_type": doc['ocr_result']['form_type'],
-                "extracted_text": doc['ocr_result']['text'],
-                "text_length": len(doc['ocr_result']['text']),
-                "key_fields": self.extract_key_fields(doc['ocr_result']['text'], doc['ocr_result']['form_type'])
-            }
-            
-            # Add analysis if available (safely handle non-serializable objects)
-            if 'analysis' in doc:
-                analysis = doc['analysis']
-                export_doc['analysis'] = {
-                    "summary": str(analysis.get('summary', '')),
-                    "key_values": str(analysis.get('key_values', '')),
-                    "form_type": str(analysis.get('form_type', '')),
-                    "text_length": analysis.get('text_length', 0),
-                    "status": str(analysis.get('status', ''))
-                }
-                
-                # Handle completeness analysis safely
-                if 'completeness_analysis' in analysis:
-                    completeness = analysis['completeness_analysis']
-                    if isinstance(completeness, dict):
-                        export_doc['analysis']['completeness_analysis'] = str(completeness.get('ai_analysis', ''))
-                    else:
-                        export_doc['analysis']['completeness_analysis'] = str(completeness)
-            
-            export_data["documents"].append(export_doc)
-            
-            # Update summary
-            form_type = doc['ocr_result']['form_type']
-            export_data["summary"]["form_types"][form_type] = export_data["summary"]["form_types"].get(form_type, 0) + 1
-            export_data["summary"]["processing_dates"].append(doc['timestamp'])
-        
-        return export_data
-    
-    def validate_api_keys(self, mistral_key: str, groq_key: str) -> Dict[str, bool]:
-        """Validate API keys format (basic validation)."""
-        validation = {
-            "mistral_valid": bool(mistral_key and len(mistral_key) > 10),
-            "groq_valid": bool(groq_key and len(groq_key) > 10),
-        }
-        validation["both_valid"] = validation["mistral_valid"] and validation["groq_valid"]
-        return validation
-    
-    def get_processing_stats(self, processed_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Get processing statistics for dashboard."""
-        if not processed_data:
-            return {
-                "total_documents": 0,
-                "total_characters": 0,
-                "form_types": {},
-                "avg_text_length": 0,
-                "processing_dates": []
-            }
-        
-        stats = {
-            "total_documents": len(processed_data),
-            "total_characters": sum(len(doc['ocr_result']['text']) for doc in processed_data),
-            "form_types": {},
-            "processing_dates": []
-        }
-        
-        # Calculate form type distribution
-        for doc in processed_data:
-            form_type = doc['ocr_result']['form_type']
-            stats["form_types"][form_type] = stats["form_types"].get(form_type, 0) + 1
-            stats["processing_dates"].append(doc['timestamp'])
-        
-        # Calculate average text length
-        stats["avg_text_length"] = stats["total_characters"] // stats["total_documents"] if stats["total_documents"] > 0 else 0
-        
-        return stats
-
-
     def validate_document_data(self, doc_data):
         """Validate document data structure"""
         required_fields = ['filename', 'timestamp', 'ocr_result', 'analysis']
@@ -274,3 +53,210 @@ class FormUtils:
                 return False, f"Missing analysis field: {field}"
         
         return True, "Document data is valid"
+    
+    def export_data(self, processed_data, chat_history=None):
+        """Export processed data and chat history to JSON format"""
+        export_data = {
+            'export_info': {
+                'timestamp': self.get_iso_timestamp(),
+                'version': '1.0',
+                'document_count': len(processed_data),
+                'chat_message_count': len(chat_history) if chat_history else 0
+            },
+            'documents': processed_data,
+            'chat_history': chat_history or []
+        }
+        
+        return export_data
+    
+    def export_to_csv(self, processed_data):
+        """Export document data to CSV format"""
+        if not processed_data:
+            return ""
+        
+        # Prepare data for CSV
+        csv_data = []
+        for doc in processed_data:
+            row = {
+                'Filename': doc['filename'],
+                'Document_Type': doc['ocr_result']['form_type'],
+                'Processing_Timestamp': doc['timestamp'],
+                'Text_Length': len(doc['ocr_result']['text']),
+                'OCR_Confidence': doc['ocr_result'].get('confidence', 'N/A'),
+                'Extracted_Text': doc['ocr_result']['text'][:500] + '...' if len(doc['ocr_result']['text']) > 500 else doc['ocr_result']['text'],
+                'Summary': doc['analysis']['summary'][:300] + '...' if len(doc['analysis']['summary']) > 300 else doc['analysis']['summary'],
+                'Key_Values': doc['analysis']['key_values'][:300] + '...' if len(doc['analysis']['key_values']) > 300 else doc['analysis']['key_values']
+            }
+            csv_data.append(row)
+        
+        # Convert to CSV string
+        output = StringIO()
+        if csv_data:
+            writer = csv.DictWriter(output, fieldnames=csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_data)
+        
+        return output.getvalue()
+    
+    def get_document_stats(self, processed_data):
+        """Get statistics about processed documents"""
+        if not processed_data:
+            return {
+                'total_documents': 0,
+                'document_types': {},
+                'total_characters': 0,
+                'average_confidence': 0,
+                'processing_dates': []
+            }
+        
+        # Calculate statistics
+        total_docs = len(processed_data)
+        doc_types = {}
+        total_chars = 0
+        confidences = []
+        dates = []
+        
+        for doc in processed_data:
+            # Document types
+            doc_type = doc['ocr_result']['form_type']
+            doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
+            
+            # Characters
+            total_chars += len(doc['ocr_result']['text'])
+            
+            # Confidence
+            if 'confidence' in doc['ocr_result']:
+                confidences.append(doc['ocr_result']['confidence'])
+            
+            # Dates
+            dates.append(doc['timestamp'])
+        
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+        
+        return {
+            'total_documents': total_docs,
+            'document_types': doc_types,
+            'total_characters': total_chars,
+            'average_characters_per_doc': total_chars / total_docs if total_docs > 0 else 0,
+            'average_confidence': round(avg_confidence, 2),
+            'processing_dates': sorted(dates),
+            'most_common_type': max(doc_types.items(), key=lambda x: x[1])[0] if doc_types else 'None'
+        }
+    
+    def search_documents(self, processed_data, search_term):
+        """Search through processed documents for a specific term"""
+        if not processed_data or not search_term:
+            return []
+        
+        search_term_lower = search_term.lower()
+        matching_docs = []
+        
+        for doc in processed_data:
+            # Search in text content
+            if search_term_lower in doc['ocr_result']['text'].lower():
+                matching_docs.append({
+                    'document': doc,
+                    'match_type': 'content',
+                    'relevance': doc['ocr_result']['text'].lower().count(search_term_lower)
+                })
+            # Search in filename
+            elif search_term_lower in doc['filename'].lower():
+                matching_docs.append({
+                    'document': doc,
+                    'match_type': 'filename',
+                    'relevance': 1
+                })
+            # Search in analysis
+            elif search_term_lower in doc['analysis']['summary'].lower() or search_term_lower in doc['analysis']['key_values'].lower():
+                matching_docs.append({
+                    'document': doc,
+                    'match_type': 'analysis',
+                    'relevance': 1
+                })
+        
+        # Sort by relevance
+        matching_docs.sort(key=lambda x: x['relevance'], reverse=True)
+        return matching_docs
+    
+    def format_document_preview(self, doc_data, max_length=200):
+        """Format a document for preview display"""
+        if not doc_data:
+            return "No document data available"
+        
+        preview = f"""
+**{doc_data['filename']}**
+Type: {doc_data['ocr_result']['form_type'].title()}
+Processed: {doc_data['timestamp']}
+
+Text Preview:
+{doc_data['ocr_result']['text'][:max_length]}{'...' if len(doc_data['ocr_result']['text']) > max_length else ''}
+"""
+        return preview.strip()
+    
+    def generate_processing_report(self, processed_data):
+        """Generate a comprehensive processing report"""
+        if not processed_data:
+            return "No documents have been processed yet."
+        
+        stats = self.get_document_stats(processed_data)
+        
+        report = f"""
+# Document Processing Report
+Generated: {self.get_timestamp()}
+
+## Summary Statistics
+- **Total Documents Processed**: {stats['total_documents']}
+- **Total Characters Extracted**: {stats['total_characters']:,}
+- **Average Characters per Document**: {stats['average_characters_per_doc']:.0f}
+- **Average OCR Confidence**: {stats['average_confidence']}%
+
+## Document Types Distribution
+"""
+        
+        for doc_type, count in stats['document_types'].items():
+            percentage = (count / stats['total_documents']) * 100
+            report += f"- **{doc_type.title()}**: {count} documents ({percentage:.1f}%)\n"
+        
+        report += f"\n## Most Common Document Type\n{stats['most_common_type'].title()}"
+        
+        report += f"\n\n## Processing Timeline\n"
+        report += f"First Document: {stats['processing_dates'][0] if stats['processing_dates'] else 'N/A'}\n"
+        report += f"Latest Document: {stats['processing_dates'][-1] if stats['processing_dates'] else 'N/A'}"
+        
+        return report
+    
+    def clean_text(self, text):
+        """Clean and normalize extracted text"""
+        if not text:
+            return ""
+        
+        # Remove excessive whitespace
+        cleaned = ' '.join(text.split())
+        
+        # Remove special characters that might cause issues
+        cleaned = cleaned.replace('\x00', '').replace('\ufffd', '')
+        
+        return cleaned.strip()
+    
+    def extract_contact_info(self, text):
+        """Extract contact information from text"""
+        import re
+        
+        contact_info = {
+            'emails': [],
+            'phones': [],
+            'addresses': []
+        }
+        
+        if not text:
+            return contact_info
+        
+        # Email pattern
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        contact_info['emails'] = re.findall(email_pattern, text)
+        
+        # Phone pattern (various formats)
+        phone_pattern = r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})'
+        contact_info['phones'] = re.findall(phone_pattern, text)
+        
+        return contact_info
