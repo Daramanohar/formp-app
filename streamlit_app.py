@@ -28,7 +28,7 @@ if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
 # Main title
-st.title("📊 Product Manager Data Tool")
+st.title("📊 form processing data tool")
 st.markdown("**Extract insights from forms and documents, then chat with your data for better team and client communication.**")
 
 # Sidebar for API configuration
