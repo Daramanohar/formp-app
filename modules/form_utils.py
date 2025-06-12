@@ -242,3 +242,35 @@ class FormUtils:
         stats["avg_text_length"] = stats["total_characters"] // stats["total_documents"] if stats["total_documents"] > 0 else 0
         
         return stats
+
+
+    def validate_document_data(self, doc_data):
+        """Validate document data structure"""
+        required_fields = ['filename', 'timestamp', 'ocr_result', 'analysis']
+        
+        if not isinstance(doc_data, dict):
+            return False, "Document data must be a dictionary"
+        
+        for field in required_fields:
+            if field not in doc_data:
+                return False, f"Missing required field: {field}"
+        
+        # Validate OCR result structure
+        if not isinstance(doc_data['ocr_result'], dict):
+            return False, "OCR result must be a dictionary"
+        
+        ocr_required = ['text', 'form_type']
+        for field in ocr_required:
+            if field not in doc_data['ocr_result']:
+                return False, f"Missing OCR field: {field}"
+        
+        # Validate analysis structure
+        if not isinstance(doc_data['analysis'], dict):
+            return False, "Analysis must be a dictionary"
+        
+        analysis_required = ['summary', 'key_values']
+        for field in analysis_required:
+            if field not in doc_data['analysis']:
+                return False, f"Missing analysis field: {field}"
+        
+        return True, "Document data is valid"
