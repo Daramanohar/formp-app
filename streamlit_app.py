@@ -31,24 +31,23 @@ if 'chat_history' not in st.session_state:
 st.title("📊 form processing data tool")
 st.markdown("**Extract insights from forms and documents, then chat with your data for better team and client communication.**")
 
-# Sidebar for API configuration
+# Sidebar for data management (API keys now handled via secrets)
 with st.sidebar:
-    st.header("🔐 API Configuration")
+    st.header("📊 Application Status")
     
-    # API Keys
-    mistral_key = st.text_input(
-        "Mistral OCR API Key", 
-        type="password",
-        value=os.getenv("MISTRAL_API_KEY", ""),
-        help="Required for OCR text extraction"
-    )
-    
-    groq_key = st.text_input(
-        "Groq API Key (for LLaMA)", 
-        type="password",
-        value=os.getenv("GROQ_API_KEY", ""),
-        help="Required for AI analysis and chatbot"
-    )
+    # Check API keys from secrets
+    try:
+        mistral_key = st.secrets["MISTRAL_API_KEY"]
+        groq_key = st.secrets["GROQ_API_KEY"]
+        st.success("🔐 API Keys: Configured")
+        st.info("Ready to process documents!")
+    except KeyError as e:
+        st.error(f"🔐 Missing API Key: {str(e)}")
+        st.error("Please configure secrets in Streamlit Cloud or local secrets.toml file")
+        st.stop()
+    except Exception as e:
+        st.error(f"🔐 Configuration Error: {str(e)}")
+        st.stop()
     
     st.divider()
     
@@ -64,13 +63,7 @@ with st.sidebar:
     else:
         st.info("No documents processed yet")
 
-# Check API keys
-if not mistral_key or not groq_key:
-    st.warning("⚠️ Please enter both API keys in the sidebar to proceed.")
-    st.info("💡 **Tip**: You can also set environment variables `MISTRAL_API_KEY` and `GROQ_API_KEY`")
-    st.stop()
-
-# Initialize processors
+# Initialize processors with API keys from secrets
 try:
     ocr_processor = OCRProcessor(mistral_key)
     data_analyzer = DataAnalyzer(groq_key)
@@ -78,6 +71,7 @@ try:
     form_utils = FormUtils()
 except Exception as e:
     st.error(f"Error initializing processors: {str(e)}")
+    st.error("Please check your API keys configuration in secrets")
     st.stop()
 
 # Main interface tabs
@@ -112,7 +106,7 @@ with tab1:
                         ocr_result = ocr_processor.process_image(uploaded_file)
                         
                         if not ocr_result or not ocr_result.get('text'):
-                            st.error("❌ Failed to extract text. Please check your image and API key.")
+                            st.error("❌ Failed to extract text. Please check your image quality.")
                             if ocr_result and ocr_result.get('error'):
                                 st.error(f"Error details: {ocr_result['error']}")
                             st.stop()
@@ -304,66 +298,62 @@ with tab3:
             st.bar_chart(stats['document_types'])
         
         # Processing report
-        st.subheader("📋 Processing Report")
-        with st.expander("View Detailed Report"):
-            report = form_utils.generate_processing_report(st.session_state.processed_data)
-            st.markdown(report)
+        st.subheader("📄 Processing Report")
+        report_data = []
+        for doc in st.session_state.processed_data:
+            report_data.append({
+                'Document': doc['filename'],
+                'Type': doc['ocr_result']['form_type'],
+                'Processed': doc['timestamp'],
+                'Characters': len(doc['ocr_result']['text'])
+            })
         
-        # Recent documents
-        st.subheader("📅 Recent Documents")
-        for doc in reversed(st.session_state.processed_data[-5:]):  # Show last 5
-            with st.expander(f"📄 {doc['filename']} - {doc['timestamp']}"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Type**: {doc['ocr_result']['form_type'].title()}")
-                    st.write(f"**Text Length**: {len(doc['ocr_result']['text'])} characters")
-                    if 'confidence' in doc['ocr_result']:
-                        st.write(f"**OCR Confidence**: {doc['ocr_result']['confidence']}")
-                with col2:
-                    preview = form_utils.format_document_preview(doc, max_length=150)
-                    st.markdown(preview)
+        if report_data:
+            st.dataframe(report_data, use_container_width=True)
         
         # Export functionality
         st.subheader("📥 Export Data")
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("📊 Export as JSON"):
-                try:
-                    export_data = form_utils.export_data(
-                        st.session_state.processed_data, 
-                        st.session_state.chat_history
-                    )
-                    
-                    st.download_button(
-                        "📥 Download JSON Export",
-                        data=json.dumps(export_data, indent=2),
-                        file_name=f"pm_data_export_{form_utils.get_timestamp().replace(':', '-').replace(' ', '_')}.json",
-                        mime="application/json"
-                    )
-                except Exception as e:
-                    st.error(f"Export failed: {str(e)}")
+            if st.button("📊 Export Analytics as JSON"):
+                export_data = {
+                    'stats': stats,
+                    'documents': st.session_state.processed_data,
+                    'export_timestamp': form_utils.get_timestamp()
+                }
+                st.download_button(
+                    "📥 Download Analytics Data",
+                    data=json.dumps(export_data, indent=2),
+                    file_name=f"form_analytics_{form_utils.get_timestamp().replace(':', '-').replace(' ', '_')}.json",
+                    mime="application/json"
+                )
         
         with col2:
-            if st.button("📈 Export as CSV"):
-                try:
-                    csv_data = form_utils.export_to_csv(st.session_state.processed_data)
-                    if csv_data:
-                        st.download_button(
-                            "📥 Download CSV Export",
-                            data=csv_data,
-                            file_name=f"pm_documents_{form_utils.get_timestamp().replace(':', '-').replace(' ', '_')}.csv",
-                            mime="text/csv"
-                        )
-                    else:
-                        st.warning("No data to export")
-                except Exception as e:
-                    st.error(f"CSV export failed: {str(e)}")
+            if st.button("📋 Export Processing Summary"):
+                summary_text = f"Form Processing Summary - {form_utils.get_timestamp()}\n"
+                summary_text += "=" * 50 + "\n\n"
+                summary_text += f"Total Documents Processed: {stats['total_documents']}\n"
+                summary_text += f"Document Types: {len(stats['document_types'])}\n"
+                summary_text += f"Total Characters Extracted: {stats['total_characters']:,}\n\n"
+                
+                summary_text += "Document Details:\n"
+                summary_text += "-" * 20 + "\n"
+                for i, doc in enumerate(st.session_state.processed_data):
+                    summary_text += f"{i+1}. {doc['filename']}\n"
+                    summary_text += f"   Type: {doc['ocr_result']['form_type']}\n"
+                    summary_text += f"   Processed: {doc['timestamp']}\n"
+                    summary_text += f"   Summary: {doc['analysis']['summary'][:100]}...\n\n"
+                
+                st.download_button(
+                    "📥 Download Summary Report",
+                    data=summary_text,
+                    file_name=f"processing_summary_{form_utils.get_timestamp().replace(':', '-').replace(' ', '_')}.txt",
+                    mime="text/plain"
+                )
 
 # Footer
 st.divider()
-st.markdown("""
-<div style='text-align: center; color: #666; font-size: 12px;'>
-    📊 Product Manager Data Tool | Built with Streamlit, Mistral AI & Groq
-</div>
-""", unsafe_allow_html=True)
+st.markdown("---")
+st.markdown("**📊 Form Processing Data Tool** - Powered by Mistral OCR & Groq LLaMA AI")
+st.markdown("Process documents seamlessly without managing API keys. Ready for production deployment!")
