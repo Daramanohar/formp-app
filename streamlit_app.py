@@ -3,35 +3,15 @@ import os
 from PIL import Image
 import json
 import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-try:
-    from modules.ocr_processor import OCRProcessor
-    from modules.data_analyzer import DataAnalyzer
-    from modules.chatbot import DataChatbot
-    from modules.form_utils import FormUtils
-except ImportError:
-    # Fallback for local development
-    import importlib.util
-    
-    def load_module_from_path(module_name, file_path):
-        spec = importlib.util.spec_from_file_location(module_name, file_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-    
-    # Load modules directly
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    form_utils = load_module_from_path("form_utils", os.path.join(base_path, "modules", "form_utils.py"))
-    ocr_processor = load_module_from_path("ocr_processor", os.path.join(base_path, "modules", "ocr_processor.py"))
-    data_analyzer = load_module_from_path("data_analyzer", os.path.join(base_path, "modules", "data_analyzer.py"))
-    chatbot = load_module_from_path("chatbot", os.path.join(base_path, "modules", "chatbot.py"))
-    
-    OCRProcessor = ocr_processor.OCRProcessor
-    DataAnalyzer = data_analyzer.DataAnalyzer
-    DataChatbot = chatbot.DataChatbot
-    FormUtils = form_utils.FormUtils
+# Add modules directory to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'modules'))
+
+# Import custom modules
+from modules.ocr_processor import OCRProcessor
+from modules.data_analyzer import DataAnalyzer
+from modules.chatbot import DataChatbot
+from modules.form_utils import FormUtils
 
 # Page configuration
 st.set_page_config(
@@ -91,10 +71,14 @@ if not mistral_key or not groq_key:
     st.stop()
 
 # Initialize processors
-ocr_processor = OCRProcessor(mistral_key)
-data_analyzer = DataAnalyzer(groq_key)
-chatbot = DataChatbot(groq_key)
-form_utils = FormUtils()
+try:
+    ocr_processor = OCRProcessor(mistral_key)
+    data_analyzer = DataAnalyzer(groq_key)
+    chatbot = DataChatbot(groq_key)
+    form_utils = FormUtils()
+except Exception as e:
+    st.error(f"Error initializing processors: {str(e)}")
+    st.stop()
 
 # Main interface tabs
 tab1, tab2, tab3 = st.tabs(["📤 Document Processing", "💬 Data Chatbot", "📈 Analytics Dashboard"])
@@ -123,15 +107,14 @@ with tab1:
             if st.button("🚀 Process Document", type="primary"):
                 with st.spinner("Processing document..."):
                     try:
-                        # Store filename for form type detection
-                        st.session_state.current_filename = uploaded_file.name
-                        
                         # OCR Processing
                         st.info("🔍 Extracting text with Mistral OCR...")
                         ocr_result = ocr_processor.process_image(uploaded_file)
                         
-                        if not ocr_result:
+                        if not ocr_result or not ocr_result.get('text'):
                             st.error("❌ Failed to extract text. Please check your image and API key.")
+                            if ocr_result and ocr_result.get('error'):
+                                st.error(f"Error details: {ocr_result['error']}")
                             st.stop()
                         
                         # Form analysis
@@ -150,6 +133,12 @@ with tab1:
                             'id': len(st.session_state.processed_data) + 1
                         }
                         
+                        # Validate document data
+                        is_valid, validation_message = form_utils.validate_document_data(processed_doc)
+                        if not is_valid:
+                            st.error(f"Document validation failed: {validation_message}")
+                            st.stop()
+                        
                         # Store in session state
                         st.session_state.processed_data.append(processed_doc)
                         
@@ -158,6 +147,7 @@ with tab1:
                         
                     except Exception as e:
                         st.error(f"❌ Processing failed: {str(e)}")
+                        st.exception(e)  # Show full traceback in development
     
     with col2:
         # Results display
@@ -221,6 +211,38 @@ with tab2:
             for i, doc in enumerate(st.session_state.processed_data):
                 st.write(f"**{i+1}.** {doc['filename']} ({doc['ocr_result']['form_type']}) - {doc['timestamp']}")
         
+        # Suggested questions
+        if st.session_state.processed_data:
+            suggested_questions = chatbot.suggest_questions(st.session_state.processed_data)
+            if suggested_questions:
+                st.subheader("💡 Suggested Questions")
+                col1, col2 = st.columns(2)
+                for i, question in enumerate(suggested_questions[:6]):  # Show max 6 suggestions
+                    if i % 2 == 0:
+                        with col1:
+                            if st.button(question, key=f"suggestion_{i}"):
+                                # Add suggestion to chat
+                                st.session_state.chat_history.append({"role": "user", "content": question})
+                                with st.spinner("🤖 Thinking..."):
+                                    try:
+                                        response = chatbot.chat_with_data(question, st.session_state.processed_data)
+                                        st.session_state.chat_history.append({"role": "assistant", "content": response})
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Chatbot error: {str(e)}")
+                    else:
+                        with col2:
+                            if st.button(question, key=f"suggestion_{i}"):
+                                # Add suggestion to chat
+                                st.session_state.chat_history.append({"role": "user", "content": question})
+                                with st.spinner("🤖 Thinking..."):
+                                    try:
+                                        response = chatbot.chat_with_data(question, st.session_state.processed_data)
+                                        st.session_state.chat_history.append({"role": "assistant", "content": response})
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Chatbot error: {str(e)}")
+        
         # Chat input
         user_question = st.chat_input("Ask me anything about your processed documents...")
         
@@ -236,6 +258,7 @@ with tab2:
                         st.session_state.processed_data
                     )
                     st.session_state.chat_history.append({"role": "assistant", "content": response})
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Chatbot error: {str(e)}")
         
@@ -260,30 +283,31 @@ with tab3:
     if not st.session_state.processed_data:
         st.info("📤 Process some documents to see analytics.")
     else:
+        # Get statistics
+        stats = form_utils.get_document_stats(st.session_state.processed_data)
+        
         # Analytics overview
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("Total Documents", len(st.session_state.processed_data))
+            st.metric("Total Documents", stats['total_documents'])
         
         with col2:
-            form_types = [doc['ocr_result']['form_type'] for doc in st.session_state.processed_data]
-            unique_types = len(set(form_types))
-            st.metric("Document Types", unique_types)
+            st.metric("Document Types", len(stats['document_types']))
         
         with col3:
-            total_chars = sum(len(doc['ocr_result']['text']) for doc in st.session_state.processed_data)
-            st.metric("Total Characters", f"{total_chars:,}")
+            st.metric("Total Characters", f"{stats['total_characters']:,}")
         
         # Document type distribution
         st.subheader("📊 Document Type Distribution")
-        form_type_counts = {}
-        for doc in st.session_state.processed_data:
-            form_type = doc['ocr_result']['form_type']
-            form_type_counts[form_type] = form_type_counts.get(form_type, 0) + 1
+        if stats['document_types']:
+            st.bar_chart(stats['document_types'])
         
-        if form_type_counts:
-            st.bar_chart(form_type_counts)
+        # Processing report
+        st.subheader("📋 Processing Report")
+        with st.expander("View Detailed Report"):
+            report = form_utils.generate_processing_report(st.session_state.processed_data)
+            st.markdown(report)
         
         # Recent documents
         st.subheader("📅 Recent Documents")
@@ -293,38 +317,53 @@ with tab3:
                 with col1:
                     st.write(f"**Type**: {doc['ocr_result']['form_type'].title()}")
                     st.write(f"**Text Length**: {len(doc['ocr_result']['text'])} characters")
+                    if 'confidence' in doc['ocr_result']:
+                        st.write(f"**OCR Confidence**: {doc['ocr_result']['confidence']}")
                 with col2:
-                    if st.button(f"💬 Chat about this doc", key=f"chat_{doc['id']}"):
-                        st.session_state.chat_context = doc
-                        st.switch_page("tab2")  # Would switch to chat tab in real implementation
+                    preview = form_utils.format_document_preview(doc, max_length=150)
+                    st.markdown(preview)
         
         # Export functionality
         st.subheader("📥 Export Data")
-        if st.button("📊 Export All Data as JSON"):
-            try:
-                export_data = form_utils.export_data(
-                    st.session_state.processed_data, 
-                    st.session_state.chat_history
-                )
-                
-                st.download_button(
-                    "📥 Download JSON Export",
-                    data=json.dumps(export_data, indent=2),
-                    file_name=f"pm_data_export_{form_utils.get_timestamp().replace(':', '-')}.json",
-                    mime="application/json"
-                )
-                st.success("✅ Export data prepared successfully!")
-            except Exception as e:
-                st.error(f"❌ Export failed: {str(e)}")
-                st.info("💡 Try processing fewer documents or contact support if the issue persists.")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📊 Export as JSON"):
+                try:
+                    export_data = form_utils.export_data(
+                        st.session_state.processed_data, 
+                        st.session_state.chat_history
+                    )
+                    
+                    st.download_button(
+                        "📥 Download JSON Export",
+                        data=json.dumps(export_data, indent=2),
+                        file_name=f"pm_data_export_{form_utils.get_timestamp().replace(':', '-').replace(' ', '_')}.json",
+                        mime="application/json"
+                    )
+                except Exception as e:
+                    st.error(f"Export failed: {str(e)}")
+        
+        with col2:
+            if st.button("📈 Export as CSV"):
+                try:
+                    csv_data = form_utils.export_to_csv(st.session_state.processed_data)
+                    if csv_data:
+                        st.download_button(
+                            "📥 Download CSV Export",
+                            data=csv_data,
+                            file_name=f"pm_documents_{form_utils.get_timestamp().replace(':', '-').replace(' ', '_')}.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.warning("No data to export")
+                except Exception as e:
+                    st.error(f"CSV export failed: {str(e)}")
 
 # Footer
 st.divider()
-st.markdown(
-    """
-    <div style='text-align: center; color: #666;'>
-        <small>📊 Product Manager Data Tool | Built with Streamlit | OCR by Mistral AI | Analysis by Groq LLaMA</small>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div style='text-align: center; color: #666; font-size: 12px;'>
+    📊 Product Manager Data Tool | Built with Streamlit, Mistral AI & Groq
+</div>
+""", unsafe_allow_html=True)
