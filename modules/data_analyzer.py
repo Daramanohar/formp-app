@@ -76,9 +76,23 @@ class DataAnalyzer:
                 "insurance": "You are an AI assistant specializing in insurance document analysis. Summarize the insurance form focusing on coverage details, claims, and policy information.",
                 "college": "You are an AI assistant specializing in educational document analysis. Summarize the academic document focusing on student information, courses, and educational details.",
                 "employment": "You are an AI assistant specializing in employment document analysis. Summarize the employment form focusing on job details, qualifications, and work-related information.",
-                "financial": "You are an AI assistant specializing in financial document analysis. Summarize the financial document focusing on monetary details, accounts, and financial obligations.",
+                "financial": "You are an expert AI assistant specialized in analyzing financial and tax-related documents. "
+                            "Review the following form or document and extract key information such as:\n"
+                            "- Declarant or Assessee details (e.g., Name, PAN, Status, Residential Status)\n"
+                            "- Relevant financial year or assessment year\n"
+                            "- Income estimates, tax amounts, and declaration content\n"
+                            "- Financial instruments or savings/investments mentioned\n"
+                            "- Any claims, exemptions, or no-tax declarations\n\n"
+                            "Then, generate a concise summary explaining:\n"
+                            "1. The purpose of the form\n"
+                            "2. The type of document (e.g., declaration, return, exemption)\n"
+                            "3. Key extracted fields and their significance\n"
+                            "4. Eligibility or compliance conditions if applicable\n\n"
+                            "Keep the tone professional and the summary clear and suitable for a product manager or auditor reviewing the document.",
+                
                 "general": "You are an AI assistant that summarizes document content concisely and clearly."
             }
+
             
             system_prompt = system_prompts.get(form_type, system_prompts["general"])
             
