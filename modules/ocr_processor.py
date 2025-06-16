@@ -46,20 +46,48 @@ class OCRProcessor:
         
         # Updated keywords for more accurate form type detection
         form_types = {
-            "medical": ["medical", "patient", "diagnosis", "health", "doctor", "hospital", "treatment", 
-                       "prescription", "pharmacy", "medication", "authorization", "scripius", "provider", 
-                       "prior authorization", "dosage", "xolair", "birth", "physician"],
-            "insurance": ["insurance", "policy", "coverage", "claim", "premium", "insurer", "policyholder", 
-                         "beneficiary", "deductible", "underwriter"],
-            "college": ["college", "university", "school", "education", "student", "admission", "academic", 
-                       "course", "degree", "gpa", "transcript"],
-            "employment": ["employment", "job", "work", "salary", "employer", "employee", "position", 
-                          "resume", "hiring", "application", "hr", "interview"],
-            "tax": ["tax", "income", "return", "deduction", "credit", "taxpayer", "irs", "filing", 
-                   "refund", "asset", "liability"],
-            "financial": ["financial", "bank", "loan", "credit", "payment", "account", "finance", 
-                         "mortgage", "investment", "statement", "transfer"]
-        }
+    "medical": [
+        "medical", "patient", "diagnosis", "health", "doctor", "hospital", "treatment", 
+        "prescription", "pharmacy", "medication", "authorization", "scripius", "provider", 
+        "prior authorization", "dosage", "xolair", "birth", "physician", "clinic", 
+        "consultation", "healthcare", "referral", "medical record", "symptoms"
+    ],
+    "insurance": [
+        "insurance", "policy", "coverage", "claim", "premium", "insurer", "policyholder", 
+        "beneficiary", "deductible", "underwriter", "co-pay", "claim number", "provider ID", 
+        "authorization number", "network"
+    ],
+    "college": [
+        "college", "university", "school", "education", "student", "admission", "academic", 
+        "course", "degree", "gpa", "transcript", "semester", "department", "roll number", 
+        "institute", "faculty", "certificate", "marksheet"
+    ],
+    "employment": [
+        "employment", "job", "work", "salary", "employer", "employee", "position", "resume", 
+        "hiring", "application", "hr", "interview", "designation", "joining", "pay slip", 
+        "offer letter", "experience", "department", "employee ID"
+    ],
+    "tax": [
+        "tax", "income", "return", "deduction", "credit", "taxpayer", "irs", "filing", 
+        "refund", "asset", "liability", "form 16", "tds", "gst", "assessment", "pan", 
+        "gross income", "taxable", "section"
+    ],
+    "financial": [
+        "financial", "bank", "loan", "credit", "payment", "account", "finance", "mortgage", 
+        "investment", "statement", "transfer", "cheque", "ifsc", "account number", 
+        "routing", "transaction", "deposit", "withdrawal", "branch", "balance", "passbook"
+    ],
+    "government": [
+        "government", "official", "certificate", "id", "passport", "license", "registration", 
+        "aadhaar", "voter", "rto", "issued by", "department", "authority", "seal", "stamp", 
+        "dob", "national"
+    ],
+    "invoice": [
+        "invoice", "receipt", "bill", "amount", "total", "paid", "due", "balance", 
+        "invoice number", "billing", "tax", "gst", "item", "vendor", "client", "quantity", 
+        "rate", "net", "subtotal"
+    ]
+}
         
         # Check for keywords in the text
         form_matches = {}
