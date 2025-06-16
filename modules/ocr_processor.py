@@ -85,7 +85,10 @@ class OCRProcessor:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Extract all text from this image. Provide the text content in a clear, structured format."
+                            "text": "You are an intelligent document parser. Extract field names and their corresponding values "
+    "from this bank document. Present the results in JSON format like:\n"
+    "{'Cheque No': '...', 'Amount': '...', 'Depositor Name': '...', 'Date': '...'}.\n"
+    "If any field is missing or unreadable, leave it blank."
                         },
                         {
                             "type": "image_url",
