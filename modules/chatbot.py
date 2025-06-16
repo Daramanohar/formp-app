@@ -5,55 +5,54 @@ import json
 
 class DataChatbot:
     """Chatbot for interacting with processed document data."""
-    
+
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.client = Groq(api_key=api_key)
-    
+
     def prepare_context(self, processed_data: List[Dict[str, Any]]) -> str:
         """Prepare context from processed documents for the chatbot."""
         context = "Available Documents and Data:\n\n"
-        
+
         for i, doc in enumerate(processed_data, 1):
             context += f"Document {i}: {doc['filename']}\n"
-            context += f"- Type: {doc['ocr_result']['form_type']}\n"
+            context += f"- Type: {doc['ocr_result'].get('form_type', 'unknown')}\n"
             context += f"- Processed: {doc['timestamp']}\n"
-            context += f"- Text Preview: {doc['ocr_result']['text'][:200]}...\n"
-            
-            # Add key insights from analysis
+            context += f"- Text Preview: {doc['ocr_result'].get('text', '')[:200]}...\n"
+
             if 'analysis' in doc and 'summary' in doc['analysis']:
                 context += f"- Summary: {doc['analysis']['summary'][:150]}...\n"
-            
+
+            if 'structured_data' in doc:
+                context += "- Extracted Key Fields:\n"
+                for k, v in doc['structured_data'].items():
+                    context += f"   - {k}: {v}\n"
+
             context += "\n" + "="*50 + "\n\n"
-        
+
         return context
-    
+
     def generate_response(self, user_question: str, context: str) -> str:
         """Generate chatbot response based on user question and document context."""
         try:
             system_prompt = """
-            You are a helpful AI assistant for product managers. You help them analyze and communicate insights from processed documents.
-            
-            Your role is to:
-            1. Answer questions about the processed documents
-            2. Provide insights for team and client communication
-            3. Suggest action items based on document analysis
-            4. Help create summaries and reports
-            5. Identify trends and patterns across documents
-            
-            Be conversational, helpful, and focus on practical insights that would be valuable for product management and team communication.
-            
-            If you don't have specific information to answer a question, be honest about it and suggest what additional information might be helpful.
+            You are a helpful AI assistant that provides accurate insights from document processing.
+
+            Your responsibilities:
+            - Accurately answer user questions using ONLY the structured data and summaries provided.
+            - If the required data isn't in the context, explain that clearly and suggest next steps.
+            - Do NOT make up values. Focus on practical business insights from ANY type of form (tax, medical, insurance, college, employment, etc).
+            - Be concise, factual, and helpful for team communication and decision-making.
             """
-            
+
             user_prompt = f"""
-            Based on the following processed documents:
+            Below is the available context from processed documents:
 
             {context}
 
-            Please answer this question: {user_question}
-            
-            Provide a helpful response that focuses on actionable insights for product management and team communication.
+            Now answer this question clearly and factually:
+
+            {user_question}
             """
 
             response = self.client.chat.completions.create(
@@ -62,78 +61,79 @@ class DataChatbot:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=0.4,
                 max_tokens=1000
             )
 
             return response.choices[0].message.content
-            
+
         except Exception as e:
             return f"I encountered an error while processing your question: {str(e)}. Please try rephrasing your question or check if the API service is available."
-    
+
     def suggest_questions(self, processed_data: List[Dict[str, Any]]) -> List[str]:
         """Suggest relevant questions based on processed data."""
         if not processed_data:
             return []
-        
-        # Analyze document types and generate relevant questions
-        form_types = [doc['ocr_result']['form_type'] for doc in processed_data]
+
+        form_types = [doc['ocr_result'].get('form_type', '') for doc in processed_data]
         unique_types = set(form_types)
-        
+
         suggestions = [
             "What are the key insights from all processed documents?",
             "Can you summarize the main findings for my team?",
             "What action items should I communicate to stakeholders?",
         ]
-        
-        # Add type-specific suggestions
+
         if 'medical' in unique_types:
             suggestions.extend([
-                "What are the key medical findings across the documents?",
-                "Are there any compliance issues I should be aware of?",
-                "What patient data insights are most important?"
+                "What are the key diagnoses or treatments mentioned?",
+                "Which patient conditions are most critical?"
             ])
-        
+
         if 'insurance' in unique_types:
             suggestions.extend([
-                "What are the key coverage details from insurance documents?",
-                "Are there any claim issues that need attention?",
-                "What policy information should I highlight to the team?"
+                "What policy or claim details are extracted?",
+                "Are there any expired policies or unpaid claims?"
             ])
-        
+
         if 'financial' in unique_types:
             suggestions.extend([
-                "What are the key financial metrics from the documents?",
-                "Are there budget implications I should communicate?",
-                "What financial risks should the team be aware of?"
+                "What is the tax amount due or refund expected?",
+                "Are there any inconsistencies in income or deductions?"
             ])
-        
-        # Add document count specific suggestions
+
+        if 'college' in unique_types:
+            suggestions.extend([
+                "What academic information is extracted?",
+                "Are there missing transcripts or GPA fields?"
+            ])
+
+        if 'employment' in unique_types:
+            suggestions.extend([
+                "What job roles or hiring statuses are mentioned?",
+                "Is the employment history complete?"
+            ])
+
         if len(processed_data) > 1:
             suggestions.extend([
-                "Can you compare the key differences between documents?",
-                "What trends do you see across all documents?",
-                "Which document requires the most urgent attention?"
+                "Compare summary fields across documents",
+                "What trends do you notice between documents?",
+                "Which document has the most important action item?"
             ])
-        
-        return suggestions[:8]  # Return top 8 suggestions
-    
+
+        return suggestions[:10]
+
     def chat_with_data(self, user_question: str, processed_data: List[Dict[str, Any]]) -> str:
-        """Main method for chatting with processed document data."""
         if not processed_data:
-            return "I don't have any processed documents to analyze yet. Please upload and process some documents first, then I'll be happy to help you analyze them!"
-        
-        # Prepare context from all processed documents
+            return "I don't have any processed documents to analyze yet. Please upload and process some documents first."
+
         context = self.prepare_context(processed_data)
-        
-        # Generate and return response
         return self.generate_response(user_question, context)
-    
+
     def get_document_stats(self, processed_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Get statistics about processed documents for chatbot context."""
         if not processed_data:
             return {}
-        
+
         stats = {
             "total_documents": len(processed_data),
             "form_types": {},
@@ -141,17 +141,15 @@ class DataChatbot:
             "latest_document": None,
             "oldest_document": None
         }
-        
-        # Calculate statistics
+
         for doc in processed_data:
-            form_type = doc['ocr_result']['form_type']
+            form_type = doc['ocr_result'].get('form_type', 'unknown')
             stats["form_types"][form_type] = stats["form_types"].get(form_type, 0) + 1
-            stats["total_text_length"] += len(doc['ocr_result']['text'])
-            
-            # Track latest and oldest
+            stats["total_text_length"] += len(doc['ocr_result'].get('text', ''))
+
             if not stats["latest_document"] or doc['timestamp'] > stats["latest_document"]['timestamp']:
                 stats["latest_document"] = doc
             if not stats["oldest_document"] or doc['timestamp'] < stats["oldest_document"]['timestamp']:
                 stats["oldest_document"] = doc
-        
+
         return stats
