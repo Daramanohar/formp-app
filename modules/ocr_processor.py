@@ -104,29 +104,47 @@ class OCRProcessor:
         
         return "general"
     
-    def process_with_mistral_ocr(self, base64_image: str, file_extension: str) -> Optional[Any]:
+    def process_with_mistral_ocr(self, base64_image: str, file_extension: str, form_type_hint: Optional[str] = None) -> Optional[Any]:
         """Process image with Mistral OCR API."""
         try:
-            # Prepare the message for OCR with improved prompt
+            # Create a balanced prompt that works for all document types
+            base_prompt = """Extract all text from this image with high accuracy. Focus on:
+1. Distinguishing between field labels and their corresponding values
+2. Maintaining the logical structure and hierarchy of the document
+3. Separating different sections of the form clearly
+4. Preserving the original organization and formatting
+5. Accurately capturing all text without mixing unrelated elements
+
+Provide the text content in a clear, structured format that preserves the document's organization."""
+
+            # Add specific guidance only if we have a form type hint
+            if form_type_hint == "financial":
+                base_prompt += """
+
+For this financial document, also ensure:
+- Currency indicators (Rs., Rupees, $) are properly separated from personal names
+- Amount fields are distinguished from name/address fields"""
+            elif form_type_hint == "medical":
+                base_prompt += """
+
+For this medical document, also ensure:
+- Patient information is clearly separated from medical data
+- Dosages and medication names are accurately captured"""
+            elif form_type_hint == "legal":
+                base_prompt += """
+
+For this legal document, also ensure:
+- Dates and signatures are clearly identified
+- Legal terms and clauses are preserved accurately"""
+
+            # Prepare the message for OCR
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": """Extract all text from this image with high accuracy. Pay special attention to:
-1. Distinguishing between field labels and field values (e.g., 'Depositor's Name' vs the actual name)
-2. Properly identifying currency amounts vs names (e.g., 'Rupees' should not be part of a person's name)
-3. Separating different sections of the form clearly
-4. Maintaining the logical structure and hierarchy of the document
-5. Identifying what text belongs to which field or section
-
-For financial documents, be especially careful to:
-- Separate currency indicators (Rs., Rupees, $) from actual names
-- Distinguish between amount fields and name/address fields
-- Preserve the original field structure
-
-Provide the text content in a clear, structured format that preserves the form's organization."""
+                            "text": base_prompt
                         },
                         {
                             "type": "image_url",
@@ -229,8 +247,14 @@ Provide the text content in a clear, structured format that preserves the form's
             if ext == "jpg":
                 ext = "jpeg"
             
-            # Process with OCR
-            ocr_result = self.process_with_mistral_ocr(base64_img, ext)
+            # First pass - get initial form type hint from filename/basic analysis
+            initial_form_hint = self.get_initial_form_hint(uploaded_file.name)
+            
+            # Process with OCR using form type hint (if available)
+            if initial_form_hint:
+                ocr_result = self.process_with_mistral_ocr(base64_img, ext, initial_form_hint)
+            else:
+                ocr_result = self.process_with_mistral_ocr(base64_img, ext)
             if not ocr_result:
                 return None
             
@@ -240,10 +264,10 @@ Provide the text content in a clear, structured format that preserves the form's
                 st.warning("No text could be extracted from the image.")
                 return None
             
-            # Identify form type
+            # Identify final form type based on content
             form_type = self.identify_form_type(ocr_text, uploaded_file.name)
             
-            # Post-process financial documents to fix common issues
+            # Apply post-processing only if needed for specific document types
             if form_type == "financial":
                 ocr_text = self.post_process_financial_text(ocr_text)
             
@@ -260,3 +284,19 @@ Provide the text content in a clear, structured format that preserves the form's
         except Exception as e:
             st.error(f"Image processing failed: {str(e)}")
             return None
+    
+    def get_initial_form_hint(self, filename: str) -> Optional[str]:
+        """Get initial form type hint from filename for better OCR processing."""
+        filename_lower = filename.lower()
+        
+        # Quick filename-based detection for initial hint
+        if any(term in filename_lower for term in ["bank", "deposit", "cheque", "financial", "money", "rupees"]):
+            return "financial"
+        elif any(term in filename_lower for term in ["medical", "prescription", "health", "patient", "doctor"]):
+            return "medical"
+        elif any(term in filename_lower for term in ["legal", "contract", "agreement", "law"]):
+            return "legal"
+        elif any(term in filename_lower for term in ["college", "university", "school", "education"]):
+            return "education"
+        
+        return None  # No specific hint, use general processing
