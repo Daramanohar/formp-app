@@ -46,48 +46,49 @@ class OCRProcessor:
         
         # Updated keywords for more accurate form type detection
         form_types = {
-    "medical": [
-        "medical", "patient", "diagnosis", "health", "doctor", "hospital", "treatment", 
-        "prescription", "pharmacy", "medication", "authorization", "scripius", "provider", 
-        "prior authorization", "dosage", "xolair", "birth", "physician", "clinic", 
-        "consultation", "healthcare", "referral", "medical record", "symptoms"
-    ],
-    "insurance": [
-        "insurance", "policy", "coverage", "claim", "premium", "insurer", "policyholder", 
-        "beneficiary", "deductible", "underwriter", "co-pay", "claim number", "provider ID", 
-        "authorization number", "network"
-    ],
-    "college": [
-        "college", "university", "school", "education", "student", "admission", "academic", 
-        "course", "degree", "gpa", "transcript", "semester", "department", "roll number", 
-        "institute", "faculty", "certificate", "marksheet"
-    ],
-    "employment": [
-        "employment", "job", "work", "salary", "employer", "employee", "position", "resume", 
-        "hiring", "application", "hr", "interview", "designation", "joining", "pay slip", 
-        "offer letter", "experience", "department", "employee ID"
-    ],
-    "tax": [
-        "tax", "income", "return", "deduction", "credit", "taxpayer", "irs", "filing", 
-        "refund", "asset", "liability", "form 16", "tds", "gst", "assessment", "pan", 
-        "gross income", "taxable", "section"
-    ],
-    "financial": [
-        "financial", "bank", "loan", "credit", "payment", "account", "finance", "mortgage", 
-        "investment", "statement", "transfer", "cheque", "ifsc", "account number", 
-        "routing", "transaction", "deposit", "withdrawal", "branch", "balance", "passbook"
-    ],
-    "government": [
-        "government", "official", "certificate", "id", "passport", "license", "registration", 
-        "aadhaar", "voter", "rto", "issued by", "department", "authority", "seal", "stamp", 
-        "dob", "national"
-    ],
-    "invoice": [
-        "invoice", "receipt", "bill", "amount", "total", "paid", "due", "balance", 
-        "invoice number", "billing", "tax", "gst", "item", "vendor", "client", "quantity", 
-        "rate", "net", "subtotal"
-    ]
-}
+            "medical": [
+                "medical", "patient", "diagnosis", "health", "doctor", "hospital", "treatment", 
+                "prescription", "pharmacy", "medication", "authorization", "scripius", "provider", 
+                "prior authorization", "dosage", "xolair", "birth", "physician", "clinic", 
+                "consultation", "healthcare", "referral", "medical record", "symptoms"
+            ],
+            "insurance": [
+                "insurance", "policy", "coverage", "claim", "premium", "insurer", "policyholder", 
+                "beneficiary", "deductible", "underwriter", "co-pay", "claim number", "provider ID", 
+                "authorization number", "network"
+            ],
+            "college": [
+                "college", "university", "school", "education", "student", "admission", "academic", 
+                "course", "degree", "gpa", "transcript", "semester", "department", "roll number", 
+                "institute", "faculty", "certificate", "marksheet"
+            ],
+            "employment": [
+                "employment", "job", "work", "salary", "employer", "employee", "position", "resume", 
+                "hiring", "application", "hr", "interview", "designation", "joining", "pay slip", 
+                "offer letter", "experience", "department", "employee ID"
+            ],
+            "tax": [
+                "tax", "income", "return", "deduction", "credit", "taxpayer", "irs", "filing", 
+                "refund", "asset", "liability", "form 16", "tds", "gst", "assessment", "pan", 
+                "gross income", "taxable", "section"
+            ],
+            "financial": [
+                "financial", "bank", "loan", "credit", "payment", "account", "finance", "mortgage", 
+                "investment", "statement", "transfer", "cheque", "ifsc", "account number", 
+                "routing", "transaction", "deposit", "withdrawal", "branch", "balance", "passbook",
+                "rupees", "amount", "total", "depositor"
+            ],
+            "government": [
+                "government", "official", "certificate", "id", "passport", "license", "registration", 
+                "aadhaar", "voter", "rto", "issued by", "department", "authority", "seal", "stamp", 
+                "dob", "national"
+            ],
+            "invoice": [
+                "invoice", "receipt", "bill", "amount", "total", "paid", "due", "balance", 
+                "invoice number", "billing", "tax", "gst", "item", "vendor", "client", "quantity", 
+                "rate", "net", "subtotal"
+            ]
+        }
         
         # Check for keywords in the text
         form_matches = {}
@@ -106,14 +107,26 @@ class OCRProcessor:
     def process_with_mistral_ocr(self, base64_image: str, file_extension: str) -> Optional[Any]:
         """Process image with Mistral OCR API."""
         try:
-            # Prepare the message for OCR
+            # Prepare the message for OCR with improved prompt
             messages = [
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": "text": "Extract all text from this image. Provide the text content in a clear, structured format."
+                            "text": """Extract all text from this image with high accuracy. Pay special attention to:
+1. Distinguishing between field labels and field values (e.g., 'Depositor's Name' vs the actual name)
+2. Properly identifying currency amounts vs names (e.g., 'Rupees' should not be part of a person's name)
+3. Separating different sections of the form clearly
+4. Maintaining the logical structure and hierarchy of the document
+5. Identifying what text belongs to which field or section
+
+For financial documents, be especially careful to:
+- Separate currency indicators (Rs., Rupees, $) from actual names
+- Distinguish between amount fields and name/address fields
+- Preserve the original field structure
+
+Provide the text content in a clear, structured format that preserves the form's organization."""
                         },
                         {
                             "type": "image_url",
@@ -126,7 +139,9 @@ class OCRProcessor:
             # Make the API call
             response = self.client.chat.complete(
                 model="pixtral-12b-2409",
-                messages=messages
+                messages=messages,
+                max_tokens=2000,
+                temperature=0.1
             )
             
             return response
@@ -148,6 +163,33 @@ class OCRProcessor:
         except Exception as e:
             st.error(f"Error extracting text from OCR response: {e}")
             return ""
+    
+    def post_process_financial_text(self, text: str) -> str:
+        """Post-process financial document text to fix common misinterpretations."""
+        import re
+        
+        # Fix common misinterpretations in financial documents
+        processed_text = text
+        
+        # Pattern to fix "Rupees" being included in depositor name
+        # Look for patterns like "Depositor's Name / डिपॉज़िटर का नाम: Rupees / रुपये:"
+        depositor_pattern = r"(Depositor'?s?\s*Name\s*[/]\s*[^\:]*\s*:\s*)(Rupees?\s*[/]\s*[^\:]*\s*:)"
+        match = re.search(depositor_pattern, processed_text, re.IGNORECASE)
+        if match:
+            # Replace the incorrect part
+            processed_text = processed_text.replace(match.group(0), match.group(1))
+            # Add the Rupees part to a separate line
+            processed_text += f"\n{match.group(2)}"
+        
+        # Fix amount patterns that might be misplaced
+        # Pattern for "Total Rs. / कुल रु: Amount"
+        amount_pattern = r"(Total\s+Rs\.\s*[/]\s*[^\:]*\s*:\s*)([A-Za-z\s]+)"
+        processed_text = re.sub(amount_pattern, r"\1", processed_text, flags=re.IGNORECASE)
+        
+        # Separate currency indicators from names
+        processed_text = re.sub(r"(Depositor'?s?\s*Name[^:]*:)\s*(Rupees?)", r"\1\n\2", processed_text, flags=re.IGNORECASE)
+        
+        return processed_text
     
     def convert_to_json(self, ocr_result: Any, ocr_text: str, form_type: str) -> Dict[str, Any]:
         """Convert OCR result to structured JSON."""
@@ -200,6 +242,10 @@ class OCRProcessor:
             
             # Identify form type
             form_type = self.identify_form_type(ocr_text, uploaded_file.name)
+            
+            # Post-process financial documents to fix common issues
+            if form_type == "financial":
+                ocr_text = self.post_process_financial_text(ocr_text)
             
             # Convert to structured format
             json_data = self.convert_to_json(ocr_result, ocr_text, form_type)
