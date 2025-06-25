@@ -85,8 +85,8 @@ with tab1:
     with col1:
         uploaded_file = st.file_uploader(
             "Upload your form/document image",
-            type=["jpg", "jpeg", "png", "pdf"],
-            help="Supported formats: JPG, PNG, PDF"
+            type=["jpg", "jpeg", "png"],
+            help="Supported formats: JPG, PNG"
         )
         
         if uploaded_file:
